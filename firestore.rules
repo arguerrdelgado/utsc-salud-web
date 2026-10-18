@@ -1,0 +1,76 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAlumno() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email.matches('.*@virtual[.]utsc[.]edu[.]mx$');
+    }
+
+    // Cuenta interna creada desde la consola de Firebase (sin verificación de correo)
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.token.email == 'admin@virtual.utsc.edu.mx';
+    }
+
+    function soloCambia(campos) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(campos);
+    }
+
+    match /libros/{bookId} {
+      allow read: if isAlumno() || isAdmin();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin()
+        // Alumno solicita devolver un libro que tiene prestado
+        || (isAlumno()
+          && resource.data.get('estado', '') == 'prestado'
+          && resource.data.usuarioUid == request.auth.uid
+          && request.resource.data.estado == 'devolucion'
+          && soloCambia(['estado']));
+    }
+
+    match /prestamos/{prestamoId} {
+      allow read: if isAdmin() || (isAlumno() && resource.data.uid == request.auth.uid);
+      allow delete: if isAdmin();
+      allow create: if isAdmin()
+        || (isAlumno()
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.correo == request.auth.token.email
+          && request.resource.data.estado == 'pendiente'
+          && get(/databases/$(database)/documents/libros/$(request.resource.data.libroId)).data.get('estado', 'disponible') == 'disponible');
+      allow update: if isAdmin()
+        // Alumno solicita devolver un libro prestado
+        || (isAlumno()
+          && resource.data.uid == request.auth.uid
+          && resource.data.estado == 'activo'
+          && request.resource.data.estado == 'devolucion_pendiente'
+          && soloCambia(['estado', 'fechaSolicitudDevolucion']))
+        // Alumno cancela una solicitud suya que aún esté pendiente
+        || (isAlumno()
+          && resource.data.uid == request.auth.uid
+          && resource.data.estado == 'pendiente'
+          && request.resource.data.estado == 'cancelado'
+          && soloCambia(['estado', 'fechaCancelacion']));
+    }
+
+    match /usuarios/{usuarioId} {
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasAll(['correo', 'avisoAceptado'])
+        && request.resource.data.avisoAceptado == true;
+      allow read, update, delete: if false;
+    }
+
+    match /mensajes_contacto/{mensajeId} {
+      allow create: if request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email.matches('.*@virtual[.]utsc[.]edu[.]mx$')
+        && request.resource.data.keys().hasAll(['nombre', 'correo', 'mensaje'])
+        && request.resource.data.nombre is string && request.resource.data.nombre.size() > 0
+        && request.resource.data.correo is string && request.resource.data.correo.size() > 0
+        && request.resource.data.mensaje is string && request.resource.data.mensaje.size() > 0
+        && request.resource.data.mensaje.size() <= 1000;
+      allow read, update, delete: if false;
+    }
+  }
+}
