@@ -9,7 +9,14 @@ export function calcularEstadisticas(prestamos = [], libros = []) {
   const porLibro = new Map()
   const porCategoria = new Map()
   const porUsuario = new Map()
-  const porEstado = { pendiente: 0, activo: 0, devolucion_pendiente: 0, devuelto: 0, rechazado: 0 }
+  const porEstado = {
+    pendiente: 0,
+    recoleccion_pendiente: 0,
+    activo: 0,
+    devolucion_pendiente: 0,
+    devuelto: 0,
+    rechazado: 0,
+  }
 
   // Inicializar las 5 categorías oficiales con 0
   for (const cat of CATEGORIAS) {
@@ -19,7 +26,7 @@ export function calcularEstadisticas(prestamos = [], libros = []) {
   for (const p of prestamos) {
     if (p.estado in porEstado) porEstado[p.estado] += 1
 
-    // Solo contabiliza si el préstamo fue autorizado
+    // Solo contabiliza si el préstamo fue entregado/autorizado
     if (ESTADOS_AUTORIZADOS.has(p.estado)) {
       const actual = porLibro.get(p.libroId) ?? { libroId: p.libroId, titulo: p.libroTitulo, total: 0 }
       actual.total += 1
