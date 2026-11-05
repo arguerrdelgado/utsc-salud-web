@@ -30,12 +30,17 @@ export default function BookCard({
   const tabColor = CATEGORY_COLORS[book.categoria] || 'bg-emerald-400'
   const estado = estadoLibro(book)
   const esMio = !!uid && book.usuarioUid === uid
-  const estaPrestado = estado === ESTADO_LIBRO.PRESTADO || estado === ESTADO_LIBRO.DEVOLUCION
+  const enRecoleccion = estado === ESTADO_LIBRO.RECOLECCION
+  const estaPrestado =
+    enRecoleccion || estado === ESTADO_LIBRO.PRESTADO || estado === ESTADO_LIBRO.DEVOLUCION
 
   // 1. Estado objetivo del ejemplar en biblioteca (para la portada)
-  const bookBadge = estaPrestado
-    ? { text: 'Prestado', className: 'bg-red-500/25 text-red-300 border border-red-500/30' }
-    : { text: 'Disponible', className: 'bg-emerald-500/25 text-emerald-300 border border-emerald-500/30' }
+  const bookBadge =
+    enRecoleccion && esMio
+      ? { text: 'Apartado', className: 'bg-amber-500/25 text-amber-300 border border-amber-500/30' }
+      : estaPrestado
+        ? { text: 'Prestado', className: 'bg-red-500/25 text-red-300 border border-red-500/30' }
+        : { text: 'Disponible', className: 'bg-emerald-500/25 text-emerald-300 border border-emerald-500/30' }
 
   return (
     <motion.div
@@ -74,7 +79,6 @@ export default function BookCard({
 
         {/* Zona clara de estado del usuario y acciones */}
         <div className="mt-2 pt-2 flex flex-col gap-2">
-          {/* Bloque de carga activa para evitar saltos o textos invertidos */}
           {busyAction === 'solicitar' ? (
             <button disabled className={`${btnActionBase} bg-emerald-400 opacity-75 cursor-wait`}>
               SOLICITANDO...
@@ -87,8 +91,21 @@ export default function BookCard({
             <button disabled className={`${btnActionBase} bg-sky-400 opacity-75 cursor-wait`}>
               DEVOLVIENDO...
             </button>
+          ) : esMio && enRecoleccion ? (
+            /* Caso 1A: Apartado para este alumno; el token se envía por correo institucional */
+            <div className="rounded-xl bg-amber-500/10 border border-amber-400/30 p-3 text-center flex flex-col gap-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-300">
+                Listo para recolección
+              </span>
+              <span className="text-xs font-semibold text-white bg-black/40 rounded-lg py-1.5 px-2 border border-amber-400/20">
+                Token enviado a tu correo @virtual.utsc.edu.mx
+              </span>
+              <span className="text-[11px] text-slate-300 leading-tight mt-0.5">
+                Presenta el código recibido en tu correo y tu credencial física UTSC en ventanilla
+              </span>
+            </div>
           ) : esMio && estaPrestado ? (
-            /* Caso 1: El libro está en poder de este alumno */
+            /* Caso 1B: El libro ya fue entregado y está en poder de este alumno */
             <div className="flex flex-col gap-2">
               <div className="rounded-full bg-sky-500/10 border border-sky-500/25 px-3 py-2 text-xs flex items-center justify-center gap-2 text-sky-200">
                 <span className="text-sm">📘</span>
@@ -109,7 +126,7 @@ export default function BookCard({
               )}
             </div>
           ) : estaPrestado ? (
-            /* Caso 2: El libro está prestado a otro alumno */
+            /* Caso 2: El libro está apartado o prestado a otro alumno */
             <div className={`${pillDisabledBase} border border-red-500/25 bg-red-500/10 text-red-300/90`}>
               NO DISPONIBLE
             </div>
@@ -125,7 +142,7 @@ export default function BookCard({
               </button>
             ) : null
           ) : tienePrestamoActivo ? (
-            /* Caso 4: Libro libre, pero el alumno ya tiene un libro en mano */
+            /* Caso 4: Libro libre, pero el alumno ya tiene un libro apartado o en mano */
             <div className={`${pillDisabledBase} border border-slate-500/25 bg-slate-500/10 text-slate-400`}>
               DEVUELVE TU LIBRO ACTUAL
             </div>

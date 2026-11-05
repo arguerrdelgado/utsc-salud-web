@@ -2,12 +2,14 @@
 
 export const ESTADO_LIBRO = {
   DISPONIBLE: 'disponible',
+  RECOLECCION: 'recoleccion',
   PRESTADO: 'prestado',
   DEVOLUCION: 'devolucion',
 }
 
 export const ESTADO_PRESTAMO = {
   PENDIENTE: 'pendiente',
+  RECOLECCION_PENDIENTE: 'recoleccion_pendiente',
   ACTIVO: 'activo',
   DEVOLUCION_PENDIENTE: 'devolucion_pendiente',
   DEVUELTO: 'devuelto',

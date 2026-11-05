@@ -83,6 +83,19 @@ describe('BookCard', () => {
     expect(screen.queryByRole('button')).toBeNull()
   })
 
+  it('indica que el token fue enviado al correo institucional y pide credencial física UTSC cuando está en recolección', () => {
+    render(
+      <BookCard
+        book={{ ...book, estado: 'recoleccion', usuarioUid: 'u1' }}
+        uid="u1"
+        onSolicitar={noop}
+      />
+    )
+    expect(screen.getByText(/listo para recolección/i)).toBeInTheDocument()
+    expect(screen.getByText(/token enviado a tu correo @virtual\.utsc\.edu\.mx/i)).toBeInTheDocument()
+    expect(screen.getByText(/credencial física utsc/i)).toBeInTheDocument()
+  })
+
   it('muestra "Devolver" al usuario que lo tiene prestado', () => {
     render(<BookCard book={{ ...book, estado: 'prestado', usuarioUid: 'u1' }} uid="u1" onSolicitar={noop} onDevolver={noop} />)
     expect(screen.getByRole('button', { name: /devolver/i })).toBeInTheDocument()
