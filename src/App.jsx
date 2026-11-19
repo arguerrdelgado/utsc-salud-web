@@ -1,16 +1,19 @@
+import { lazy, Suspense } from 'react'
 import { Routes, Route, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import Navbar from './components/Navbar.jsx'
 import BottomNav from './components/BottomNav.jsx'
 import Footer from './components/Footer.jsx'
-import Inicio from './pages/Inicio.jsx'
-import Biblioteca from './pages/Biblioteca.jsx'
-import Contacto from './pages/Contacto.jsx'
-import Login from './pages/Login.jsx'
-import Registro from './pages/Registro.jsx'
-import Aviso from './pages/Aviso.jsx'
-import Terminos from './pages/Terminos.jsx'
-import Admin from './pages/Admin.jsx'
+import IosInstallBanner from './components/IosInstallBanner.jsx'
+
+const Inicio = lazy(() => import('./pages/Inicio.jsx'))
+const Biblioteca = lazy(() => import('./pages/Biblioteca.jsx'))
+const Contacto = lazy(() => import('./pages/Contacto.jsx'))
+const Login = lazy(() => import('./pages/Login.jsx'))
+const Registro = lazy(() => import('./pages/Registro.jsx'))
+const Aviso = lazy(() => import('./pages/Aviso.jsx'))
+const Terminos = lazy(() => import('./pages/Terminos.jsx'))
+const Admin = lazy(() => import('./pages/Admin.jsx'))
 
 const pageVariants = {
   initial: { opacity: 0, y: 12 },
@@ -32,6 +35,14 @@ function Page({ children }) {
   )
 }
 
+function PageFallback() {
+  return (
+    <div className="min-h-[calc(100vh-64px)] flex items-center justify-center text-sm text-emerald-300/70">
+      Cargando...
+    </div>
+  )
+}
+
 export default function App() {
   const location = useLocation()
 
@@ -46,19 +57,22 @@ export default function App() {
         }}
       />
       <Navbar />
-      <AnimatePresence mode="wait">
-        <Routes location={location} key={location.pathname}>
-          <Route path="/" element={<Page><Inicio /></Page>} />
-          <Route path="/biblioteca" element={<Page><Biblioteca /></Page>} />
-          <Route path="/contacto" element={<Page><Contacto /></Page>} />
-          <Route path="/login" element={<Page><Login /></Page>} />
-          <Route path="/registro" element={<Page><Registro /></Page>} />
-          <Route path="/aviso" element={<Page><Aviso /></Page>} />
-          <Route path="/terminos" element={<Page><Terminos /></Page>} />
-          <Route path="/admin" element={<Page><Admin /></Page>} />
-        </Routes>
-      </AnimatePresence>
+      <Suspense fallback={<PageFallback />}>
+        <AnimatePresence mode="wait">
+          <Routes location={location} key={location.pathname}>
+            <Route path="/" element={<Page><Inicio /></Page>} />
+            <Route path="/biblioteca" element={<Page><Biblioteca /></Page>} />
+            <Route path="/contacto" element={<Page><Contacto /></Page>} />
+            <Route path="/login" element={<Page><Login /></Page>} />
+            <Route path="/registro" element={<Page><Registro /></Page>} />
+            <Route path="/aviso" element={<Page><Aviso /></Page>} />
+            <Route path="/terminos" element={<Page><Terminos /></Page>} />
+            <Route path="/admin" element={<Page><Admin /></Page>} />
+          </Routes>
+        </AnimatePresence>
+      </Suspense>
       <Footer />
+      <IosInstallBanner />
       <BottomNav />
     </div>
   )
