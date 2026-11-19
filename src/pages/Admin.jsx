@@ -48,7 +48,7 @@ const SECCIONES = [
   },
   {
     id: 'devoluciones',
-    titulo: 'Autorizar Devolución de Libros',
+    titulo: 'Autorizar Regreso de Libros',
     descripcion: 'Confirma que el libro fue entregado para liberarlo en el catálogo.',
     icon: <Icon d={<><path d="M3 12a9 9 0 1 0 3-6.7" /><path d="M3 4v5h5" /></>} />,
     contador: ESTADO_PRESTAMO.DEVOLUCION_PENDIENTE,
@@ -152,10 +152,11 @@ export default function Admin() {
           <SolicitudesLista
             estado={ESTADO_PRESTAMO.DEVOLUCION_PENDIENTE}
             campoFecha="fechaSolicitudDevolucion"
-            etiquetaFecha="Devolución solicitada"
+            etiquetaFecha="Regreso solicitado"
             onAutorizar={aprobarDevolucion}
             onRechazar={rechazarDevolucion}
-            vacio="No hay devoluciones pendientes."
+            textoAutorizar="Regresar"
+            vacio="No hay libros pendientes de regresar."
           />
         )}
         {abierto === 'estadisticas' && <Estadisticas />}

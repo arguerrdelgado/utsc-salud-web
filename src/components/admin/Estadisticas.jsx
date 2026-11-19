@@ -1,7 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { collection, getDocs } from 'firebase/firestore'
 import { db } from '../../config/firebase.js'
 import { calcularEstadisticas } from '../../utils/estadisticas.js'
+
+const PERIODOS = [
+  { id: 'all', label: 'Todo el tiempo' },
+  { id: '30d', label: 'Último mes' },
+  { id: '180d', label: 'Últimos 6 meses' },
+  { id: '365d', label: 'Último año' },
+]
 
 function Kpi({ label, value, color = 'text-emerald-300' }) {
   return (
@@ -131,32 +138,73 @@ function PodioLibros({ items }) {
 }
 
 export default function Estadisticas() {
-  const [stats, setStats] = useState(null)
+  const [prestamos, setPrestamos] = useState([])
+  const [libros, setLibros] = useState([])
+  const [periodo, setPeriodo] = useState('all')
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [mostrarSinPrestamos, setMostrarSinPrestamos] = useState(false)
 
   useEffect(() => {
     Promise.all([getDocs(collection(db, 'prestamos')), getDocs(collection(db, 'libros'))])
       .then(([pSnap, lSnap]) => {
-        const prestamos = pSnap.docs.map((d) => ({ id: d.id, ...d.data() }))
-        const libros = lSnap.docs.map((d) => ({ id: d.id, ...d.data() }))
-        setStats(calcularEstadisticas(prestamos, libros))
+        setPrestamos(pSnap.docs.map((d) => ({ id: d.id, ...d.data() })))
+        setLibros(lSnap.docs.map((d) => ({ id: d.id, ...d.data() })))
+        setLoading(false)
       })
-      .catch(() => setError('No se pudieron cargar las estadísticas. Verifica las reglas de Firestore.'))
+      .catch(() => {
+        setError('No se pudieron cargar las estadísticas. Verifica las reglas de Firestore.')
+        setLoading(false)
+      })
   }, [])
 
+  const stats = useMemo(() => {
+    if (loading || error) return null
+    return calcularEstadisticas(prestamos, libros, periodo)
+  }, [prestamos, libros, periodo, loading, error])
+
   if (error) return <p className="text-red-400 text-sm">{error}</p>
-  if (!stats) return <p className="text-slate-400 text-sm">Calculando estadísticas...</p>
+  if (loading || !stats) return <p className="text-slate-400 text-sm">Calculando estadísticas...</p>
 
   const topUsuario = stats.usuariosActivos[0]
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-6">
+      {/* Selector de Periodo */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3.5 rounded-2xl bg-black/40 border border-emerald-500/20">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+            <span>📅</span> Periodo de consulta
+          </span>
+          {periodo !== 'all' && (
+            <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-emerald-400/20 text-emerald-300 border border-emerald-400/40">
+              {PERIODOS.find((p) => p.id === periodo)?.label}
+            </span>
+          )}
+        </div>
+        <div className="grid grid-cols-2 sm:flex items-center rounded-xl bg-black/60 p-1 border border-emerald-500/20 gap-1">
+          {PERIODOS.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => setPeriodo(p.id)}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all text-center ${
+                periodo === p.id
+                  ? 'bg-emerald-400 text-[#04120c] font-bold shadow'
+                  : 'text-slate-400 hover:text-white hover:bg-emerald-950/40'
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* KPIs Generales */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Kpi label="Solicitudes totales" value={stats.totalSolicitudes} />
         <Kpi label="Préstamos activos" value={stats.porEstado.activo + stats.porEstado.devolucion_pendiente} color="text-sky-300" />
-        <Kpi label="Devueltos" value={stats.porEstado.devuelto} />
+        <Kpi label="Regresados" value={stats.porEstado.devuelto} />
         <Kpi label="Rechazados" value={stats.porEstado.rechazado} color="text-red-300" />
         <Kpi label="Libros en catálogo" value={stats.totalLibros} color="text-white" />
         <Kpi label="Disponibles" value={stats.librosDisponibles} />

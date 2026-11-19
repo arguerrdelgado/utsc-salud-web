@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { calcularEstadisticas } from '../estadisticas.js'
+import { calcularEstadisticas, filtrarPrestamosPorPeriodo, getTimestampMillis } from '../estadisticas.js'
 import { generarScriptLibros } from '../generarScript.js'
 
 const prestamos = [
@@ -37,6 +37,29 @@ describe('calcularEstadisticas', () => {
 
   it('detecta libros que nunca se han solicitado o autorizado', () => {
     expect(s.nuncaSolicitados.map((l) => l.id)).toEqual(['c'])
+  })
+
+  it('filtra correctamente según el periodo seleccionado (30d, 180d, 365d)', () => {
+    const now = 1000000000000
+    const dayMs = 86400000
+    const prestamosConFechas = [
+      { id: '1', libroId: 'a', estado: 'activo', fechaSolicitud: { toMillis: () => now - 5 * dayMs } }, // 5 días atrás (< 30d)
+      { id: '2', libroId: 'b', estado: 'devuelto', fechaSolicitud: { toMillis: () => now - 50 * dayMs } }, // 50 días atrás (> 30d, < 180d)
+      { id: '3', libroId: 'c', estado: 'devuelto', fechaSolicitud: { toMillis: () => now - 200 * dayMs } }, // 200 días atrás (> 180d, < 365d)
+      { id: '4', libroId: 'd', estado: 'devuelto', fechaSolicitud: { toMillis: () => now - 400 * dayMs } }, // 400 días atrás (> 365d)
+    ]
+
+    const statsMes = calcularEstadisticas(prestamosConFechas, libros, '30d', now)
+    expect(statsMes.totalSolicitudes).toBe(1)
+
+    const statsSemestre = calcularEstadisticas(prestamosConFechas, libros, '180d', now)
+    expect(statsSemestre.totalSolicitudes).toBe(2)
+
+    const statsAnio = calcularEstadisticas(prestamosConFechas, libros, '365d', now)
+    expect(statsAnio.totalSolicitudes).toBe(3)
+
+    const statsTodo = calcularEstadisticas(prestamosConFechas, libros, 'all', now)
+    expect(statsTodo.totalSolicitudes).toBe(4)
   })
 })
 
