@@ -6,3 +6,5 @@ firebase-debug.log
 *.log
 .env
 .env.local
+serviceAccountKey.json
+*.serviceAccount*.json
