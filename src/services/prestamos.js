@@ -24,6 +24,9 @@ import { sendLoanRequestEmail, sendPickupTokenEmail } from '../config/emailjs.js
  *   estado: 'pendiente' -> 'recoleccion_pendiente' -> 'activo' -> 'devolucion_pendiente' -> 'devuelto'
  *           'pendiente' / 'recoleccion_pendiente' -> 'rechazado'
  *
+ * Tokens de recolección (colección privada "tokens_recoleccion"):
+ *   Solo legible/escribible por admin para evitar exposición en DevTools/Network del alumno.
+ *
  * Reglas de negocio:
  * 1. Un alumno puede tener máximo 3 solicitudes/préstamos vigentes.
  * 2. Un alumno solo puede tener 1 libro asignado a la vez (recoleccion_pendiente, activo, devolucion_pendiente).
@@ -40,6 +43,14 @@ export { ESTADO_LIBRO, ESTADO_PRESTAMO, estadoLibro }
 export function generarTokenRecoleccion() {
   const digitos = Math.floor(1000 + Math.random() * 9000)
   return `UTSC-${digitos}`
+}
+
+export function validarTokenRecoleccion(tokenIngresado = '', tokenEsperado = '') {
+  const limpio = String(tokenIngresado).trim().toUpperCase()
+  const esperado = String(tokenEsperado).trim().toUpperCase()
+  if (!limpio || !esperado) return false
+  const soloDigitos = esperado.replace(/^UTSC-/, '')
+  return limpio === esperado || limpio === soloDigitos
 }
 
 const ESTADOS_CON_EJEMPLAR = [
@@ -149,6 +160,7 @@ export async function cancelarSolicitud(book, user) {
 export async function aprobarSolicitud(prestamo) {
   const libroRef = doc(db, 'libros', prestamo.libroId)
   const prestamoRef = doc(db, 'prestamos', prestamo.id)
+  const tokenRef = doc(db, 'tokens_recoleccion', prestamo.id)
 
   // 1. Validar que el alumno no tenga ya un libro apartado o prestado
   const qAlumno = query(collection(db, 'prestamos'), where('uid', '==', prestamo.uid))
@@ -178,8 +190,13 @@ export async function aprobarSolicitud(prestamo) {
     }
     tx.update(prestamoRef, {
       estado: ESTADO_PRESTAMO.RECOLECCION_PENDIENTE,
-      tokenRecoleccion,
       fechaAprobacion: serverTimestamp(),
+    })
+    tx.set(tokenRef, {
+      token: tokenRecoleccion,
+      uid: prestamo.uid,
+      libroId: prestamo.libroId,
+      createdAt: serverTimestamp(),
     })
     tx.update(libroRef, {
       estado: ESTADO_LIBRO.RECOLECCION,
@@ -216,43 +233,54 @@ export async function confirmarRecoleccion(prestamo, { tokenIngresado = '', cred
     throw new Error('Debes verificar la credencial física UTSC del alumno antes de entregar el libro.')
   }
 
-  const limpio = tokenIngresado.trim().toUpperCase()
-  const esperado = (prestamo.tokenRecoleccion ?? '').toUpperCase()
-  const soloDigitos = esperado.replace(/^UTSC-/, '')
-
-  if (!limpio || !esperado || (limpio !== esperado && limpio !== soloDigitos)) {
-    throw new Error('El token de recolección no coincide. Verifica el código con el alumno.')
+  if (!String(tokenIngresado).trim()) {
+    throw new Error('Ingresa el token de recolección proporcionado por el alumno.')
   }
 
   const libroRef = doc(db, 'libros', prestamo.libroId)
   const prestamoRef = doc(db, 'prestamos', prestamo.id)
+  const tokenRef = doc(db, 'tokens_recoleccion', prestamo.id)
 
   await runTransaction(db, async (tx) => {
-    const actual = await tx.get(prestamoRef)
+    const [actual, tokenSnap] = await Promise.all([tx.get(prestamoRef), tx.get(tokenRef)])
     if (actual.data()?.estado !== ESTADO_PRESTAMO.RECOLECCION_PENDIENTE) {
       throw new Error('Este préstamo ya no está pendiente de recolección.')
     }
+
+    const esperado = tokenSnap.data()?.token ?? prestamo.tokenRecoleccion ?? ''
+    if (!validarTokenRecoleccion(tokenIngresado, esperado)) {
+      throw new Error('El token de recolección no coincide. Verifica el código con el alumno.')
+    }
+
     tx.update(prestamoRef, {
       estado: ESTADO_PRESTAMO.ACTIVO,
       credencialVerificada: true,
       fechaRecoleccion: serverTimestamp(),
+      tokenRecoleccion: deleteField(),
     })
     tx.update(libroRef, {
       estado: ESTADO_LIBRO.PRESTADO,
     })
+    tx.delete(tokenRef)
   })
 }
 
-export const cancelarRecoleccion = (prestamo) =>
-  resolverDevolucion(
-    prestamo,
-    {
-      estado: ESTADO_PRESTAMO.RECHAZADO,
-      motivo: 'Recolección cancelada o identidad no acreditada en ventanilla',
-      fechaResolucion: serverTimestamp(),
-    },
-    { estado: ESTADO_LIBRO.DISPONIBLE, usuarioUid: deleteField(), prestamoId: deleteField() },
-  )
+export const cancelarRecoleccion = (prestamo) => {
+  const batch = writeBatch(db)
+  batch.update(doc(db, 'prestamos', prestamo.id), {
+    estado: ESTADO_PRESTAMO.RECHAZADO,
+    motivo: 'Recolección cancelada o identidad no acreditada en ventanilla',
+    fechaResolucion: serverTimestamp(),
+    tokenRecoleccion: deleteField(),
+  })
+  batch.update(doc(db, 'libros', prestamo.libroId), {
+    estado: ESTADO_LIBRO.DISPONIBLE,
+    usuarioUid: deleteField(),
+    prestamoId: deleteField(),
+  })
+  batch.delete(doc(db, 'tokens_recoleccion', prestamo.id))
+  return batch.commit()
+}
 
 export const rechazarSolicitud = (prestamo) => {
   const batch = writeBatch(db)
